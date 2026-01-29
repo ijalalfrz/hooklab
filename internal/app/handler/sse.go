@@ -1,17 +1,17 @@
-package main
-
-// This file contains Server-Sent Events (SSE) handlers for real-time event streaming.
+package handler
 
 import (
 	"encoding/json"
 	"net/http"
 	"time"
+
+	"github.com/essajiwa/hooklab/internal/app/service"
 )
 
 // eventsStreamHandler handles GET /api/stream requests for Server-Sent Events.
 // It establishes a persistent connection and streams webhook events in real-time.
 // Sends heartbeat pings every 25 seconds to keep the connection alive.
-func (a *App) eventsStreamHandler(w http.ResponseWriter, r *http.Request) {
+func EventsStreamHandler(a *service.App, w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
@@ -25,14 +25,14 @@ func (a *App) eventsStreamHandler(w http.ResponseWriter, r *http.Request) {
 	keepAlive := time.NewTicker(25 * time.Second)
 	defer keepAlive.Stop()
 
-	a.eventsStreamLoop(w, r, flusher, keepAlive.C)
+	eventsStreamLoop(a, w, r, flusher, keepAlive.C)
 }
 
 // eventsStreamLoop is the main event loop for SSE connections.
 // It listens for new events, heartbeat ticks, and context cancellation.
-func (a *App) eventsStreamLoop(w http.ResponseWriter, r *http.Request, flusher http.Flusher, ticks <-chan time.Time) {
-	subscriber := a.addSubscriber()
-	defer a.removeSubscriber(subscriber)
+func eventsStreamLoop(a *service.App, w http.ResponseWriter, r *http.Request, flusher http.Flusher, ticks <-chan time.Time) {
+	subscriber := a.AddSubscriber()
+	defer a.RemoveSubscriber(subscriber)
 
 	for {
 		select {

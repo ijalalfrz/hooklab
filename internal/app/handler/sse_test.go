@@ -1,24 +1,27 @@
-package main
+package handler
 
 import (
 	"context"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/essajiwa/hooklab/internal/app/model"
+	"github.com/essajiwa/hooklab/internal/app/service"
 )
 
 func TestEventsStreamHandlerNoFlusher(t *testing.T) {
-	app := &App{}
+	app := &service.App{}
 	req := httptest.NewRequest("GET", "/api/stream", nil)
 	writer := &noFlushWriter{}
-	app.eventsStreamHandler(writer, req)
+	EventsStreamHandler(app, writer, req)
 	if writer.status != 500 {
 		t.Errorf("expected status 500 for no flusher, got %d", writer.status)
 	}
 }
 
 func TestEventsStreamLoopHeartbeat(t *testing.T) {
-	app := &App{}
+	app := &service.App{}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	req := httptest.NewRequest("GET", "/api/stream", nil).WithContext(ctx)
@@ -27,7 +30,7 @@ func TestEventsStreamLoopHeartbeat(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		app.eventsStreamLoop(writer, req, writer, ticks)
+		eventsStreamLoop(app, writer, req, writer, ticks)
 		close(done)
 	}()
 
@@ -68,7 +71,7 @@ func containsHelper(s, substr string) bool {
 }
 
 func TestEventsStreamLoopEvent(t *testing.T) {
-	app := &App{}
+	app := &service.App{}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	req := httptest.NewRequest("GET", "/api/stream", nil).WithContext(ctx)
@@ -77,7 +80,7 @@ func TestEventsStreamLoopEvent(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		app.eventsStreamLoop(writer, req, writer, ticks)
+		eventsStreamLoop(app, writer, req, writer, ticks)
 		close(done)
 	}()
 
@@ -85,7 +88,7 @@ func TestEventsStreamLoopEvent(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Broadcast an event
-	app.broadcastEvent(Event{ID: 42, Key: "test"})
+	app.BroadcastEvent(model.Event{ID: 42, Key: "test"})
 
 	// Wait a bit for event to be written
 	time.Sleep(10 * time.Millisecond)
@@ -101,7 +104,7 @@ func TestEventsStreamLoopEvent(t *testing.T) {
 }
 
 func TestEventsStreamLoopChannelClosed(t *testing.T) {
-	app := &App{}
+	app := &service.App{}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	req := httptest.NewRequest("GET", "/api/stream", nil).WithContext(ctx)
@@ -110,7 +113,7 @@ func TestEventsStreamLoopChannelClosed(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		app.eventsStreamLoop(writer, req, writer, ticks)
+		eventsStreamLoop(app, writer, req, writer, ticks)
 		close(done)
 	}()
 
@@ -118,7 +121,7 @@ func TestEventsStreamLoopChannelClosed(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Close subscribers which closes the channel
-	app.closeSubscribers()
+	app.CloseSubscribers()
 
 	select {
 	case <-done:
@@ -128,7 +131,7 @@ func TestEventsStreamLoopChannelClosed(t *testing.T) {
 }
 
 func TestEventsStreamLoopContextDone(t *testing.T) {
-	app := &App{}
+	app := &service.App{}
 	ctx, cancel := context.WithCancel(context.Background())
 	req := httptest.NewRequest("GET", "/api/stream", nil).WithContext(ctx)
 	writer := &sseWriter{}
@@ -136,7 +139,7 @@ func TestEventsStreamLoopContextDone(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		app.eventsStreamLoop(writer, req, writer, ticks)
+		eventsStreamLoop(app, writer, req, writer, ticks)
 		close(done)
 	}()
 
@@ -154,13 +157,13 @@ func TestEventsStreamLoopContextDone(t *testing.T) {
 }
 
 func TestBroadcastEventWithFullChannel(t *testing.T) {
-	app := &App{subscribers: make(map[chan Event]struct{})}
+	app := &service.App{Subscribers: make(map[chan model.Event]struct{})}
 	// Create a channel with buffer 1 and fill it
-	ch := make(chan Event, 1)
-	ch <- Event{ID: 0}
-	app.subscribers[ch] = struct{}{}
+	ch := make(chan model.Event, 1)
+	ch <- model.Event{ID: 0}
+	app.Subscribers[ch] = struct{}{}
 
 	// Broadcast should not block even with full channel
-	app.broadcastEvent(Event{ID: 1})
+	app.BroadcastEvent(model.Event{ID: 1})
 	// Test passes if it doesn't deadlock
 }

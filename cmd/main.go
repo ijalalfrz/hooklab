@@ -23,6 +23,10 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/essajiwa/hooklab/internal/app/model"
+	"github.com/essajiwa/hooklab/internal/app/router"
+	"github.com/essajiwa/hooklab/internal/app/service"
 )
 
 func main() {
@@ -35,14 +39,14 @@ func main() {
 		log.Fatalf("Invalid JSON for -response flag: %v", err)
 	}
 
-	app := &App{}
-	app.setResponseConfig("default", ResponseConfig{
+	app := &service.App{}
+	app.SetResponseConfig("default", model.ResponseConfig{
 		Response:    responseData,
 		ResponseRaw: string(*responseJSON),
 		StatusCode:  http.StatusOK,
 	})
 
-	server, err := newServer(app, *port)
+	server, err := router.NewServer(app, *port)
 	if err != nil {
 		log.Fatalf("Failed to create server: %v", err)
 	}
@@ -69,7 +73,7 @@ func main() {
 	defer cancel()
 
 	// Shutdown the server gracefully
-	app.closeSubscribers()
+	app.CloseSubscribers()
 	if err := server.Shutdown(ctx); err != nil {
 		log.Fatalf("Server shutdown failed: %v\n", err)
 	}

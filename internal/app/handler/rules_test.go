@@ -1,4 +1,4 @@
-package main
+package handler
 
 import (
 	"encoding/json"
@@ -6,21 +6,24 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/essajiwa/hooklab/internal/app/model"
+	"github.com/essajiwa/hooklab/internal/app/service"
 )
 
 // ==================== Rule CRUD Tests ====================
 
 func TestGetRulesEmpty(t *testing.T) {
-	app := &App{}
-	rules := app.getRules("test-key")
+	app := &service.App{}
+	rules := app.GetRules("test-key")
 	if len(rules) != 0 {
 		t.Errorf("expected empty rules, got %d", len(rules))
 	}
 }
 
 func TestAddRule(t *testing.T) {
-	app := &App{}
-	rule := Rule{
+	app := &service.App{}
+	rule := model.Rule{
 		Name:       "Test Rule",
 		Condition:  "body.amount > 100",
 		Response:   map[string]string{"status": "matched"},
@@ -29,7 +32,7 @@ func TestAddRule(t *testing.T) {
 		Enabled:    true,
 	}
 
-	created := app.addRule("payments", rule)
+	created := app.AddRule("payments", rule)
 
 	if created.ID == "" {
 		t.Error("expected rule ID to be set")
@@ -38,20 +41,20 @@ func TestAddRule(t *testing.T) {
 		t.Errorf("expected name 'Test Rule', got '%s'", created.Name)
 	}
 
-	rules := app.getRules("payments")
+	rules := app.GetRules("payments")
 	if len(rules) != 1 {
 		t.Errorf("expected 1 rule, got %d", len(rules))
 	}
 }
 
 func TestAddMultipleRules(t *testing.T) {
-	app := &App{}
+	app := &service.App{}
 
-	app.addRule("key1", Rule{Name: "Rule 1", Priority: 2})
-	app.addRule("key1", Rule{Name: "Rule 2", Priority: 1})
-	app.addRule("key2", Rule{Name: "Rule 3", Priority: 0})
+	app.AddRule("key1", model.Rule{Name: "Rule 1", Priority: 2})
+	app.AddRule("key1", model.Rule{Name: "Rule 2", Priority: 1})
+	app.AddRule("key2", model.Rule{Name: "Rule 3", Priority: 0})
 
-	rules1 := app.getRules("key1")
+	rules1 := app.GetRules("key1")
 	if len(rules1) != 2 {
 		t.Errorf("expected 2 rules for key1, got %d", len(rules1))
 	}
@@ -60,17 +63,17 @@ func TestAddMultipleRules(t *testing.T) {
 		t.Errorf("expected 'Rule 2' first (priority 1), got '%s'", rules1[0].Name)
 	}
 
-	rules2 := app.getRules("key2")
+	rules2 := app.GetRules("key2")
 	if len(rules2) != 1 {
 		t.Errorf("expected 1 rule for key2, got %d", len(rules2))
 	}
 }
 
 func TestUpdateRule(t *testing.T) {
-	app := &App{}
-	created := app.addRule("test", Rule{Name: "Original", Priority: 1})
+	app := &service.App{}
+	created := app.AddRule("test", model.Rule{Name: "Original", Priority: 1})
 
-	updated := Rule{
+	updated := model.Rule{
 		Name:       "Updated",
 		Condition:  "body.new == true",
 		Response:   map[string]string{"updated": "yes"},
@@ -79,12 +82,12 @@ func TestUpdateRule(t *testing.T) {
 		Enabled:    true,
 	}
 
-	success := app.updateRule("test", created.ID, updated)
+	success := app.UpdateRule("test", created.ID, updated)
 	if !success {
 		t.Error("expected update to succeed")
 	}
 
-	rules := app.getRules("test")
+	rules := app.GetRules("test")
 	if len(rules) != 1 {
 		t.Fatalf("expected 1 rule, got %d", len(rules))
 	}
@@ -97,32 +100,32 @@ func TestUpdateRule(t *testing.T) {
 }
 
 func TestUpdateRuleNotFound(t *testing.T) {
-	app := &App{}
-	app.addRule("test", Rule{Name: "Existing"})
+	app := &service.App{}
+	app.AddRule("test", model.Rule{Name: "Existing"})
 
-	success := app.updateRule("test", "nonexistent", Rule{Name: "New"})
+	success := app.UpdateRule("test", "nonexistent", model.Rule{Name: "New"})
 	if success {
 		t.Error("expected update to fail for nonexistent rule")
 	}
 
-	app2 := &App{}
-	success = app2.updateRule("test", "any", Rule{})
+	app2 := &service.App{}
+	success = app2.UpdateRule("test", "any", model.Rule{})
 	if success {
 		t.Error("expected update to fail with nil rules map")
 	}
 }
 
 func TestDeleteRule(t *testing.T) {
-	app := &App{}
-	rule1 := app.addRule("test", Rule{Name: "Rule 1"})
-	app.addRule("test", Rule{Name: "Rule 2"})
+	app := &service.App{}
+	rule1 := app.AddRule("test", model.Rule{Name: "Rule 1"})
+	app.AddRule("test", model.Rule{Name: "Rule 2"})
 
-	success := app.deleteRule("test", rule1.ID)
+	success := app.DeleteRule("test", rule1.ID)
 	if !success {
 		t.Error("expected delete to succeed")
 	}
 
-	rules := app.getRules("test")
+	rules := app.GetRules("test")
 	if len(rules) != 1 {
 		t.Errorf("expected 1 rule after delete, got %d", len(rules))
 	}
@@ -132,44 +135,44 @@ func TestDeleteRule(t *testing.T) {
 }
 
 func TestDeleteRuleNotFound(t *testing.T) {
-	app := &App{}
-	app.addRule("test", Rule{Name: "Existing"})
+	app := &service.App{}
+	app.AddRule("test", model.Rule{Name: "Existing"})
 
-	success := app.deleteRule("test", "nonexistent")
+	success := app.DeleteRule("test", "nonexistent")
 	if success {
 		t.Error("expected delete to fail for nonexistent rule")
 	}
 
-	app2 := &App{}
-	success = app2.deleteRule("test", "any")
+	app2 := &service.App{}
+	success = app2.DeleteRule("test", "any")
 	if success {
 		t.Error("expected delete to fail with nil rules map")
 	}
 }
 
 func TestSetRules(t *testing.T) {
-	app := &App{}
-	rules := []Rule{
+	app := &service.App{}
+	rules := []model.Rule{
 		{ID: "r1", Name: "Rule 1"},
 		{ID: "r2", Name: "Rule 2"},
 	}
 
-	app.setRules("test", rules)
+	app.SetRules("test", rules)
 
-	got := app.getRules("test")
+	got := app.GetRules("test")
 	if len(got) != 2 {
 		t.Errorf("expected 2 rules, got %d", len(got))
 	}
 }
 
 func TestGetRulesNilKeyRules(t *testing.T) {
-	app := &App{
-		rules: map[string][]Rule{
+	app := &service.App{
+		Rules: map[string][]model.Rule{
 			"other": {{Name: "Other"}},
 		},
 	}
 
-	rules := app.getRules("nonexistent")
+	rules := app.GetRules("nonexistent")
 	if len(rules) != 0 {
 		t.Errorf("expected empty rules for nonexistent key, got %d", len(rules))
 	}
@@ -178,8 +181,8 @@ func TestGetRulesNilKeyRules(t *testing.T) {
 // ==================== Rule Evaluation Tests ====================
 
 func TestEvaluateRulesNoRules(t *testing.T) {
-	app := &App{}
-	result, err := app.evaluateRules("test", `{"amount": 100}`, "POST", nil)
+	app := &service.App{}
+	result, err := app.EvaluateRules("test", `{"amount": 100}`, "POST", nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -189,8 +192,8 @@ func TestEvaluateRulesNoRules(t *testing.T) {
 }
 
 func TestEvaluateRulesSimpleMatch(t *testing.T) {
-	app := &App{}
-	app.addRule("test", Rule{
+	app := &service.App{}
+	app.AddRule("test", model.Rule{
 		Name:       "High Amount",
 		Condition:  "body.amount > 50",
 		Response:   map[string]string{"matched": "high"},
@@ -199,7 +202,7 @@ func TestEvaluateRulesSimpleMatch(t *testing.T) {
 		Enabled:    true,
 	})
 
-	result, err := app.evaluateRules("test", `{"amount": 100}`, "POST", nil)
+	result, err := app.EvaluateRules("test", `{"amount": 100}`, "POST", nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -212,8 +215,8 @@ func TestEvaluateRulesSimpleMatch(t *testing.T) {
 }
 
 func TestEvaluateRulesNoMatch(t *testing.T) {
-	app := &App{}
-	app.addRule("test", Rule{
+	app := &service.App{}
+	app.AddRule("test", model.Rule{
 		Name:       "High Amount",
 		Condition:  "body.amount > 100",
 		Response:   map[string]string{"matched": "high"},
@@ -222,7 +225,7 @@ func TestEvaluateRulesNoMatch(t *testing.T) {
 		Enabled:    true,
 	})
 
-	result, err := app.evaluateRules("test", `{"amount": 50}`, "POST", nil)
+	result, err := app.EvaluateRules("test", `{"amount": 50}`, "POST", nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -232,8 +235,8 @@ func TestEvaluateRulesNoMatch(t *testing.T) {
 }
 
 func TestEvaluateRulesDisabledRule(t *testing.T) {
-	app := &App{}
-	app.addRule("test", Rule{
+	app := &service.App{}
+	app.AddRule("test", model.Rule{
 		Name:       "Disabled Rule",
 		Condition:  "true",
 		Response:   map[string]string{"matched": "disabled"},
@@ -242,7 +245,7 @@ func TestEvaluateRulesDisabledRule(t *testing.T) {
 		Enabled:    false,
 	})
 
-	result, err := app.evaluateRules("test", `{}`, "POST", nil)
+	result, err := app.EvaluateRules("test", `{}`, "POST", nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -252,8 +255,8 @@ func TestEvaluateRulesDisabledRule(t *testing.T) {
 }
 
 func TestEvaluateRulesPriorityOrder(t *testing.T) {
-	app := &App{}
-	app.addRule("test", Rule{
+	app := &service.App{}
+	app.AddRule("test", model.Rule{
 		Name:       "Low Priority",
 		Condition:  "true",
 		Response:   map[string]string{"priority": "low"},
@@ -261,7 +264,7 @@ func TestEvaluateRulesPriorityOrder(t *testing.T) {
 		Priority:   10,
 		Enabled:    true,
 	})
-	app.addRule("test", Rule{
+	app.AddRule("test", model.Rule{
 		Name:       "High Priority",
 		Condition:  "true",
 		Response:   map[string]string{"priority": "high"},
@@ -270,7 +273,7 @@ func TestEvaluateRulesPriorityOrder(t *testing.T) {
 		Enabled:    true,
 	})
 
-	result, _ := app.evaluateRules("test", `{}`, "POST", nil)
+	result, _ := app.EvaluateRules("test", `{}`, "POST", nil)
 	if result == nil {
 		t.Fatal("expected result")
 	}
@@ -280,8 +283,8 @@ func TestEvaluateRulesPriorityOrder(t *testing.T) {
 }
 
 func TestEvaluateRulesMethodCondition(t *testing.T) {
-	app := &App{}
-	app.addRule("test", Rule{
+	app := &service.App{}
+	app.AddRule("test", model.Rule{
 		Name:       "POST Only",
 		Condition:  `method == "POST"`,
 		Response:   map[string]string{"method": "post"},
@@ -290,20 +293,20 @@ func TestEvaluateRulesMethodCondition(t *testing.T) {
 		Enabled:    true,
 	})
 
-	result, _ := app.evaluateRules("test", `{}`, "POST", nil)
+	result, _ := app.EvaluateRules("test", `{}`, "POST", nil)
 	if result == nil {
 		t.Error("expected match for POST")
 	}
 
-	result, _ = app.evaluateRules("test", `{}`, "GET", nil)
+	result, _ = app.EvaluateRules("test", `{}`, "GET", nil)
 	if result != nil {
 		t.Error("expected no match for GET")
 	}
 }
 
 func TestEvaluateRulesHeaderCondition(t *testing.T) {
-	app := &App{}
-	app.addRule("test", Rule{
+	app := &service.App{}
+	app.AddRule("test", model.Rule{
 		Name:       "Has Auth",
 		Condition:  `"Authorization" in headers`,
 		Response:   map[string]string{"auth": "present"},
@@ -316,20 +319,20 @@ func TestEvaluateRulesHeaderCondition(t *testing.T) {
 		"Authorization": {"Bearer token"},
 	}
 
-	result, _ := app.evaluateRules("test", `{}`, "POST", headers)
+	result, _ := app.EvaluateRules("test", `{}`, "POST", headers)
 	if result == nil {
 		t.Error("expected match with Authorization header")
 	}
 
-	result, _ = app.evaluateRules("test", `{}`, "POST", nil)
+	result, _ = app.EvaluateRules("test", `{}`, "POST", nil)
 	if result != nil {
 		t.Error("expected no match without Authorization header")
 	}
 }
 
 func TestEvaluateRulesInvalidExpression(t *testing.T) {
-	app := &App{}
-	app.addRule("test", Rule{
+	app := &service.App{}
+	app.AddRule("test", model.Rule{
 		Name:       "Invalid",
 		Condition:  "this is not valid syntax !!!",
 		Response:   map[string]string{"should": "not match"},
@@ -338,7 +341,7 @@ func TestEvaluateRulesInvalidExpression(t *testing.T) {
 		Enabled:    true,
 	})
 
-	result, err := app.evaluateRules("test", `{}`, "POST", nil)
+	result, err := app.EvaluateRules("test", `{}`, "POST", nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -348,8 +351,8 @@ func TestEvaluateRulesInvalidExpression(t *testing.T) {
 }
 
 func TestEvaluateRulesNonJSONBody(t *testing.T) {
-	app := &App{}
-	app.addRule("test", Rule{
+	app := &service.App{}
+	app.AddRule("test", model.Rule{
 		Name:       "Always Match",
 		Condition:  "true",
 		Response:   map[string]string{"matched": "yes"},
@@ -358,7 +361,7 @@ func TestEvaluateRulesNonJSONBody(t *testing.T) {
 		Enabled:    true,
 	})
 
-	result, err := app.evaluateRules("test", "plain text body", "POST", nil)
+	result, err := app.EvaluateRules("test", "plain text body", "POST", nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -368,8 +371,8 @@ func TestEvaluateRulesNonJSONBody(t *testing.T) {
 }
 
 func TestEvaluateRulesComplexCondition(t *testing.T) {
-	app := &App{}
-	app.addRule("test", Rule{
+	app := &service.App{}
+	app.AddRule("test", model.Rule{
 		Name:       "Complex",
 		Condition:  `body.type == "payment" && body.amount >= 100`,
 		Response:   map[string]string{"matched": "complex"},
@@ -378,25 +381,25 @@ func TestEvaluateRulesComplexCondition(t *testing.T) {
 		Enabled:    true,
 	})
 
-	result, _ := app.evaluateRules("test", `{"type":"payment","amount":150}`, "POST", nil)
+	result, _ := app.EvaluateRules("test", `{"type":"payment","amount":150}`, "POST", nil)
 	if result == nil {
 		t.Error("expected match for complex condition")
 	}
 
-	result, _ = app.evaluateRules("test", `{"type":"refund","amount":150}`, "POST", nil)
+	result, _ = app.EvaluateRules("test", `{"type":"refund","amount":150}`, "POST", nil)
 	if result != nil {
 		t.Error("expected no match for wrong type")
 	}
 
-	result, _ = app.evaluateRules("test", `{"type":"payment","amount":50}`, "POST", nil)
+	result, _ = app.EvaluateRules("test", `{"type":"payment","amount":50}`, "POST", nil)
 	if result != nil {
 		t.Error("expected no match for low amount")
 	}
 }
 
 func TestEvaluateRulesExpressionRuntimeError(t *testing.T) {
-	app := &App{}
-	app.addRule("test", Rule{
+	app := &service.App{}
+	app.AddRule("test", model.Rule{
 		Name:       "Runtime Error",
 		Condition:  "body.nonexistent.deep.path > 0",
 		Response:   map[string]string{"matched": "yes"},
@@ -405,7 +408,7 @@ func TestEvaluateRulesExpressionRuntimeError(t *testing.T) {
 		Enabled:    true,
 	})
 
-	result, err := app.evaluateRules("test", `{"simple": "value"}`, "POST", nil)
+	result, err := app.EvaluateRules("test", `{"simple": "value"}`, "POST", nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -415,8 +418,8 @@ func TestEvaluateRulesExpressionRuntimeError(t *testing.T) {
 }
 
 func TestEvaluateRulesEmptyBody(t *testing.T) {
-	app := &App{}
-	app.addRule("test", Rule{
+	app := &service.App{}
+	app.AddRule("test", model.Rule{
 		Name:       "Always True",
 		Condition:  "true",
 		Response:   map[string]string{"matched": "yes"},
@@ -425,7 +428,7 @@ func TestEvaluateRulesEmptyBody(t *testing.T) {
 		Enabled:    true,
 	})
 
-	result, err := app.evaluateRules("test", "", "POST", nil)
+	result, err := app.EvaluateRules("test", "", "POST", nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -437,13 +440,13 @@ func TestEvaluateRulesEmptyBody(t *testing.T) {
 // ==================== Rules API Handler Tests ====================
 
 func TestRulesHandlerGet(t *testing.T) {
-	app := &App{}
-	app.addRule("test-key", Rule{Name: "Rule 1", Enabled: true})
+	app := &service.App{}
+	app.AddRule("test-key", model.Rule{Name: "Rule 1", Enabled: true})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/rules?key=test-key", nil)
 	w := httptest.NewRecorder()
 
-	app.rulesHandler(w, req)
+	RulesHandler(app, w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", w.Code)
@@ -462,13 +465,13 @@ func TestRulesHandlerGet(t *testing.T) {
 }
 
 func TestRulesHandlerGetDefaultKey(t *testing.T) {
-	app := &App{}
-	app.addRule("default", Rule{Name: "Default Rule"})
+	app := &service.App{}
+	app.AddRule("default", model.Rule{Name: "Default Rule"})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/rules", nil)
 	w := httptest.NewRecorder()
 
-	app.rulesHandler(w, req)
+	RulesHandler(app, w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", w.Code)
@@ -483,20 +486,20 @@ func TestRulesHandlerGetDefaultKey(t *testing.T) {
 }
 
 func TestRulesHandlerPost(t *testing.T) {
-	app := &App{}
+	app := &service.App{}
 
 	body := `{"name":"New Rule","condition":"body.test == true","response":{"ok":true},"statusCode":200,"priority":1,"enabled":true}`
 	req := httptest.NewRequest(http.MethodPost, "/api/rules?key=test", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	app.rulesHandler(w, req)
+	RulesHandler(app, w, req)
 
 	if w.Code != http.StatusCreated {
 		t.Errorf("expected status 201, got %d", w.Code)
 	}
 
-	var response Rule
+	var response model.Rule
 	json.Unmarshal(w.Body.Bytes(), &response)
 
 	if response.ID == "" {
@@ -506,19 +509,19 @@ func TestRulesHandlerPost(t *testing.T) {
 		t.Errorf("expected name 'New Rule', got '%s'", response.Name)
 	}
 
-	rules := app.getRules("test")
+	rules := app.GetRules("test")
 	if len(rules) != 1 {
 		t.Errorf("expected 1 rule, got %d", len(rules))
 	}
 }
 
 func TestRulesHandlerPostInvalidJSON(t *testing.T) {
-	app := &App{}
+	app := &service.App{}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/rules?key=test", strings.NewReader("not json"))
 	w := httptest.NewRecorder()
 
-	app.rulesHandler(w, req)
+	RulesHandler(app, w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400, got %d", w.Code)
@@ -526,14 +529,14 @@ func TestRulesHandlerPostInvalidJSON(t *testing.T) {
 }
 
 func TestRulesHandlerPostInvalidExpression(t *testing.T) {
-	app := &App{}
+	app := &service.App{}
 
 	body := `{"name":"Bad Rule","condition":"invalid !!! syntax","response":{},"statusCode":200,"enabled":true}`
 	req := httptest.NewRequest(http.MethodPost, "/api/rules?key=test", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	app.rulesHandler(w, req)
+	RulesHandler(app, w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400 for invalid expression, got %d", w.Code)
@@ -548,14 +551,14 @@ func TestRulesHandlerPostInvalidExpression(t *testing.T) {
 }
 
 func TestRulesHandlerPostEmptyCondition(t *testing.T) {
-	app := &App{}
+	app := &service.App{}
 
 	body := `{"name":"Empty Condition","condition":"","response":{},"statusCode":200,"enabled":true}`
 	req := httptest.NewRequest(http.MethodPost, "/api/rules?key=test", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	app.rulesHandler(w, req)
+	RulesHandler(app, w, req)
 
 	if w.Code != http.StatusCreated {
 		t.Errorf("expected status 201, got %d", w.Code)
@@ -563,33 +566,33 @@ func TestRulesHandlerPostEmptyCondition(t *testing.T) {
 }
 
 func TestRulesHandlerPut(t *testing.T) {
-	app := &App{}
-	created := app.addRule("test", Rule{Name: "Original", Priority: 1, Enabled: true})
+	app := &service.App{}
+	created := app.AddRule("test", model.Rule{Name: "Original", Priority: 1, Enabled: true})
 
 	body := `{"name":"Updated","condition":"true","response":{"updated":true},"statusCode":201,"priority":2,"enabled":true}`
 	req := httptest.NewRequest(http.MethodPut, "/api/rules?key=test&id="+created.ID, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	app.rulesHandler(w, req)
+	RulesHandler(app, w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", w.Code)
 	}
 
-	rules := app.getRules("test")
+	rules := app.GetRules("test")
 	if rules[0].Name != "Updated" {
 		t.Errorf("expected name 'Updated', got '%s'", rules[0].Name)
 	}
 }
 
 func TestRulesHandlerPutNoID(t *testing.T) {
-	app := &App{}
+	app := &service.App{}
 
 	req := httptest.NewRequest(http.MethodPut, "/api/rules?key=test", strings.NewReader(`{}`))
 	w := httptest.NewRecorder()
 
-	app.rulesHandler(w, req)
+	RulesHandler(app, w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400, got %d", w.Code)
@@ -597,14 +600,14 @@ func TestRulesHandlerPutNoID(t *testing.T) {
 }
 
 func TestRulesHandlerPutNotFound(t *testing.T) {
-	app := &App{}
+	app := &service.App{}
 
 	body := `{"name":"Updated"}`
 	req := httptest.NewRequest(http.MethodPut, "/api/rules?key=test&id=nonexistent", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	app.rulesHandler(w, req)
+	RulesHandler(app, w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("expected status 404, got %d", w.Code)
@@ -612,15 +615,15 @@ func TestRulesHandlerPutNotFound(t *testing.T) {
 }
 
 func TestRulesHandlerPutInvalidExpression(t *testing.T) {
-	app := &App{}
-	created := app.addRule("test", Rule{Name: "Original"})
+	app := &service.App{}
+	created := app.AddRule("test", model.Rule{Name: "Original"})
 
 	body := `{"name":"Bad","condition":"invalid !!! syntax"}`
 	req := httptest.NewRequest(http.MethodPut, "/api/rules?key=test&id="+created.ID, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	app.rulesHandler(w, req)
+	RulesHandler(app, w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400, got %d", w.Code)
@@ -628,31 +631,31 @@ func TestRulesHandlerPutInvalidExpression(t *testing.T) {
 }
 
 func TestRulesHandlerDelete(t *testing.T) {
-	app := &App{}
-	created := app.addRule("test", Rule{Name: "To Delete"})
+	app := &service.App{}
+	created := app.AddRule("test", model.Rule{Name: "To Delete"})
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/rules?key=test&id="+created.ID, nil)
 	w := httptest.NewRecorder()
 
-	app.rulesHandler(w, req)
+	RulesHandler(app, w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", w.Code)
 	}
 
-	rules := app.getRules("test")
+	rules := app.GetRules("test")
 	if len(rules) != 0 {
 		t.Errorf("expected 0 rules after delete, got %d", len(rules))
 	}
 }
 
 func TestRulesHandlerDeleteNoID(t *testing.T) {
-	app := &App{}
+	app := &service.App{}
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/rules?key=test", nil)
 	w := httptest.NewRecorder()
 
-	app.rulesHandler(w, req)
+	RulesHandler(app, w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400, got %d", w.Code)
@@ -660,12 +663,12 @@ func TestRulesHandlerDeleteNoID(t *testing.T) {
 }
 
 func TestRulesHandlerDeleteNotFound(t *testing.T) {
-	app := &App{}
+	app := &service.App{}
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/rules?key=test&id=nonexistent", nil)
 	w := httptest.NewRecorder()
 
-	app.rulesHandler(w, req)
+	RulesHandler(app, w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("expected status 404, got %d", w.Code)
@@ -673,12 +676,12 @@ func TestRulesHandlerDeleteNotFound(t *testing.T) {
 }
 
 func TestRulesHandlerMethodNotAllowed(t *testing.T) {
-	app := &App{}
+	app := &service.App{}
 
 	req := httptest.NewRequest(http.MethodPatch, "/api/rules?key=test", nil)
 	w := httptest.NewRecorder()
 
-	app.rulesHandler(w, req)
+	RulesHandler(app, w, req)
 
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("expected status 405, got %d", w.Code)
@@ -686,12 +689,12 @@ func TestRulesHandlerMethodNotAllowed(t *testing.T) {
 }
 
 func TestRulesHandlerPostReadError(t *testing.T) {
-	app := &App{}
+	app := &service.App{}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/rules?key=test", &errorReader{})
 	w := httptest.NewRecorder()
 
-	app.rulesHandler(w, req)
+	RulesHandler(app, w, req)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("expected status 500, got %d", w.Code)
@@ -699,12 +702,12 @@ func TestRulesHandlerPostReadError(t *testing.T) {
 }
 
 func TestRulesHandlerPutReadError(t *testing.T) {
-	app := &App{}
+	app := &service.App{}
 
 	req := httptest.NewRequest(http.MethodPut, "/api/rules?key=test&id=123", &errorReader{})
 	w := httptest.NewRecorder()
 
-	app.rulesHandler(w, req)
+	RulesHandler(app, w, req)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("expected status 500, got %d", w.Code)
@@ -712,12 +715,12 @@ func TestRulesHandlerPutReadError(t *testing.T) {
 }
 
 func TestRulesHandlerPutInvalidJSON(t *testing.T) {
-	app := &App{}
+	app := &service.App{}
 
 	req := httptest.NewRequest(http.MethodPut, "/api/rules?key=test&id=123", strings.NewReader("not json"))
 	w := httptest.NewRecorder()
 
-	app.rulesHandler(w, req)
+	RulesHandler(app, w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400, got %d", w.Code)
@@ -725,13 +728,13 @@ func TestRulesHandlerPutInvalidJSON(t *testing.T) {
 }
 
 func TestRulesHandlerGetWriteError(t *testing.T) {
-	app := &App{}
-	app.addRule("test", Rule{Name: "Rule 1"})
+	app := &service.App{}
+	app.AddRule("test", model.Rule{Name: "Rule 1"})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/rules?key=test", nil)
 	w := &errorResponseWriter{}
 
-	app.rulesHandler(w, req)
+	RulesHandler(app, w, req)
 
 	if w.status != http.StatusInternalServerError {
 		t.Errorf("expected status 500 on write error, got %d", w.status)
@@ -741,8 +744,8 @@ func TestRulesHandlerGetWriteError(t *testing.T) {
 // ==================== Webhook Handler with Rules Tests ====================
 
 func TestWebhookHandlerWithRuleMatch(t *testing.T) {
-	app := &App{}
-	app.addRule("payments", Rule{
+	app := &service.App{}
+	app.AddRule("payments", model.Rule{
 		Name:       "High Amount",
 		Condition:  "body.amount > 100",
 		Response:   map[string]string{"status": "flagged"},
@@ -756,7 +759,7 @@ func TestWebhookHandlerWithRuleMatch(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	app.webhookHandler(w, req)
+	WebhookHandler(app, w, req)
 
 	if w.Code != 202 {
 		t.Errorf("expected status 202 from rule, got %d", w.Code)
@@ -771,12 +774,12 @@ func TestWebhookHandlerWithRuleMatch(t *testing.T) {
 }
 
 func TestWebhookHandlerWithRuleNoMatch(t *testing.T) {
-	app := &App{}
-	app.setResponseConfig("payments", ResponseConfig{
+	app := &service.App{}
+	app.SetResponseConfig("payments", model.ResponseConfig{
 		Response:   map[string]string{"default": "response"},
 		StatusCode: 200,
 	})
-	app.addRule("payments", Rule{
+	app.AddRule("payments", model.Rule{
 		Name:       "High Amount",
 		Condition:  "body.amount > 100",
 		Response:   map[string]string{"status": "flagged"},
@@ -790,7 +793,7 @@ func TestWebhookHandlerWithRuleNoMatch(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	app.webhookHandler(w, req)
+	WebhookHandler(app, w, req)
 
 	if w.Code != 200 {
 		t.Errorf("expected status 200 from default, got %d", w.Code)
@@ -805,12 +808,12 @@ func TestWebhookHandlerWithRuleNoMatch(t *testing.T) {
 }
 
 func TestWebhookHandlerWithDisabledRule(t *testing.T) {
-	app := &App{}
-	app.setResponseConfig("test", ResponseConfig{
+	app := &service.App{}
+	app.SetResponseConfig("test", model.ResponseConfig{
 		Response:   map[string]string{"default": "yes"},
 		StatusCode: 200,
 	})
-	app.addRule("test", Rule{
+	app.AddRule("test", model.Rule{
 		Name:       "Disabled",
 		Condition:  "true",
 		Response:   map[string]string{"matched": "disabled"},
@@ -822,7 +825,7 @@ func TestWebhookHandlerWithDisabledRule(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/webhook/test", strings.NewReader(`{}`))
 	w := httptest.NewRecorder()
 
-	app.webhookHandler(w, req)
+	WebhookHandler(app, w, req)
 
 	if w.Code != 200 {
 		t.Errorf("expected status 200, got %d", w.Code)
@@ -832,8 +835,8 @@ func TestWebhookHandlerWithDisabledRule(t *testing.T) {
 // ==================== getKeys Tests ====================
 
 func TestGetKeysEmpty(t *testing.T) {
-	app := &App{}
-	keys := app.getKeys()
+	app := &service.App{}
+	keys := app.GetKeys()
 
 	if len(keys) != 1 {
 		t.Errorf("expected 1 key (default), got %d", len(keys))
@@ -844,10 +847,10 @@ func TestGetKeysEmpty(t *testing.T) {
 }
 
 func TestGetKeysFromResponses(t *testing.T) {
-	app := &App{}
-	app.setResponseConfig("response-key", ResponseConfig{Response: "test", StatusCode: 200})
+	app := &service.App{}
+	app.SetResponseConfig("response-key", model.ResponseConfig{Response: "test", StatusCode: 200})
 
-	keys := app.getKeys()
+	keys := app.GetKeys()
 
 	found := false
 	for _, k := range keys {
@@ -862,10 +865,10 @@ func TestGetKeysFromResponses(t *testing.T) {
 }
 
 func TestGetKeysFromEvents(t *testing.T) {
-	app := &App{}
-	app.storeEvent(httptest.NewRequest(http.MethodPost, "/webhook/event-key", nil), "event-key", "test")
+	app := &service.App{}
+	app.StoreEvent(httptest.NewRequest(http.MethodPost, "/webhook/event-key", nil), "event-key", "test")
 
-	keys := app.getKeys()
+	keys := app.GetKeys()
 
 	found := false
 	for _, k := range keys {
@@ -880,10 +883,10 @@ func TestGetKeysFromEvents(t *testing.T) {
 }
 
 func TestGetKeysFromRules(t *testing.T) {
-	app := &App{}
-	app.addRule("rule-key", Rule{Name: "test", Condition: "true", Enabled: true})
+	app := &service.App{}
+	app.AddRule("rule-key", model.Rule{Name: "test", Condition: "true", Enabled: true})
 
-	keys := app.getKeys()
+	keys := app.GetKeys()
 
 	found := false
 	for _, k := range keys {
@@ -898,12 +901,12 @@ func TestGetKeysFromRules(t *testing.T) {
 }
 
 func TestGetKeysCombined(t *testing.T) {
-	app := &App{}
-	app.setResponseConfig("resp-key", ResponseConfig{Response: "test", StatusCode: 200})
-	app.storeEvent(httptest.NewRequest(http.MethodPost, "/webhook/event-key", nil), "event-key", "test")
-	app.addRule("rule-key", Rule{Name: "test", Condition: "true", Enabled: true})
+	app := &service.App{}
+	app.SetResponseConfig("resp-key", model.ResponseConfig{Response: "test", StatusCode: 200})
+	app.StoreEvent(httptest.NewRequest(http.MethodPost, "/webhook/event-key", nil), "event-key", "test")
+	app.AddRule("rule-key", model.Rule{Name: "test", Condition: "true", Enabled: true})
 
-	keys := app.getKeys()
+	keys := app.GetKeys()
 
 	expectedKeys := []string{"default", "resp-key", "event-key", "rule-key"}
 	if len(keys) != len(expectedKeys) {
@@ -925,12 +928,12 @@ func TestGetKeysCombined(t *testing.T) {
 }
 
 func TestGetKeysSorted(t *testing.T) {
-	app := &App{}
-	app.setResponseConfig("zebra", ResponseConfig{Response: "test", StatusCode: 200})
-	app.setResponseConfig("alpha", ResponseConfig{Response: "test", StatusCode: 200})
-	app.setResponseConfig("beta", ResponseConfig{Response: "test", StatusCode: 200})
+	app := &service.App{}
+	app.SetResponseConfig("zebra", model.ResponseConfig{Response: "test", StatusCode: 200})
+	app.SetResponseConfig("alpha", model.ResponseConfig{Response: "test", StatusCode: 200})
+	app.SetResponseConfig("beta", model.ResponseConfig{Response: "test", StatusCode: 200})
 
-	keys := app.getKeys()
+	keys := app.GetKeys()
 
 	for i := 1; i < len(keys); i++ {
 		if keys[i-1] > keys[i] {
